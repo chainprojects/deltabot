@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "build": "mkdir -p public && cp -r src/public/* public/"
   },
   "dependencies": {
     "axios": "^1.9.0",
