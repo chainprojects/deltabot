@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delta Exchange Trading Bot</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding-top: 20px; }
+    .trade-card { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">Delta Exchange Trading Bot</h1>
+    
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5>Create New Trading Configuration</h5>
+          </div>
+          <div class="card-body">
+            <form id="configForm">
+              <div class="mb-3">
+                <label for="configName" class="form-label">Configuration Name</label>
+                <input type="text" class="form-control" id="configName" required>
+              </div>
+              <button type="submit" class="btn btn-primary">Create Configuration</button>
+            </form>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            <h5>Add New Trade</h5>
+          </div>
+          <div class="card-body">
+            <form id="tradeForm">
+              <div class="mb-3">
+                <label for="configSelect" class="form-label">Select Configuration</label>
+                <select class="form-control" id="configSelect" required></select>
+              </div>
+              <div class="mb-3">
+                <label for="symbol" class="form-label">Symbol (e.g., BTCUSDT)</label>
+                <input type="text" class="form-control" id="symbol" required>
+              </div>
+              <div class="mb-3">
+                <label for="side" class="form-label">Side</label>
+                <select class="form-control" id="side" required>
+                  <option value="buy">Buy</option>
+                  <option value="sell">Sell</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="quantity" class="form-label">Quantity</label>
+                <input type="number" step="0.0001" class="form-control" id="quantity" required>
+              </div>
+              <div class="mb-3">
+                <label for="entryCondition" class="form-label">Entry Condition</label>
+                <select class="form-control" id="entryCondition" required>
+                  <option value="above">Price Above</option>
+                  <option value="below">Price Below</option>
+                  <option value="equals">Price Equals</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="entryPrice" class="form-label">Entry Price</label>
+                <input type="number" step="0.01" class="form-control" id="entryPrice" required>
+              </div>
+              <div class="mb-3">
+                <label for="stopLossPrice" class="form-label">Stop Loss Price</label>
+                <input type="number" step="0.01" class="form-control" id="stopLossPrice" required>
+              </div>
+              <div class="mb-3">
+                <label for="takeProfitPrice" class="form-label">Take Profit Price (Optional)</label>
+                <input type="number" step="0.01" class="form-control" id="takeProfitPrice">
+              </div>
+              <button type="submit" class="btn btn-success">Add Trade</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <h5>Your Trading Configurations</h5>
+          </div>
+          <div class="card-body">
+            <div id="configsList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load configurations
+      loadConfigurations();
+      
+      // Config form submission
+      document.getElementById('configForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        createConfiguration();
+      });
+      
+      // Trade form submission
+      document.getElementById('tradeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        addTrade();
+      });
+    });
+    
+    async function loadConfigurations() {
+      try {
+        const response = await fetch('/api/configs');
+        const configs = await response.json();
+        
+        // Update config select
+        const configSelect = document.getElementById('configSelect');
+        configSelect.innerHTML = '';
+        
+        configs.forEach(config => {
+          const option = document.createElement('option');
+          option.value = config.id;
+          option.textContent = config.name;
+          configSelect.appendChild(option);
+        });
+        
+        // Update configs list
+        const configsList = document.getElementById('configsList');
+        configsList.innerHTML = '';
+        
+        if (configs.length === 0) {
+          configsList.innerHTML = '<p>No configurations yet. Create one to get started.</p>';
+          return;
+        }
+        
+        configs.forEach(config => {
+          const configCard = document.createElement('div');
+          configCard.className = 'card mb-3';
+          
+          const statusBadge = config.isActive 
+            ? '<span class="badge bg-success">Active</span>' 
+            : '<span class="badge bg-secondary">Inactive</span>';
+          
+          configCard.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">${config.name} ${statusBadge}</h6>
+              <div>
+                <button class="btn btn-sm ${config.isActive ? 'btn-warning' : 'btn-success'}" 
+                  onclick="toggleConfigStatus('${config.id}', ${!config.isActive})">
+                  ${config.isActive ? 'Stop' : 'Start'}
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteConfig('${config.id}')">Delete</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <h6>Trades:</h6>
+              <div id="trades-${config.id}">
+                ${renderTrades(config.trades)}
+              </div>
+            </div>
+          `;
+          
+          configsList.appendChild(configCard);
+        });
+      } catch (error) {
+        console.error('Error loading configurations:', error);
+        alert('Failed to load configurations');
+      }
+    }
+    
+    function renderTrades(trades) {
+      if (!trades || trades.length === 0) {
+        return '<p>No trades configured yet.</p>';
+      }
+      
+      return trades.map(trade => {
+        let statusClass = 'secondary';
+        if (trade.status === 'active') statusClass = 'success';
+        if (trade.status === 'stopped') statusClass = 'danger';
+        if (trade.status === 'completed') statusClass = 'info';
+        
+        return `
+          <div class="card trade-card">
+            <div class="card-body">
+              <h6>${trade.symbol} <span class="badge bg-${statusClass}">${trade.status}</span></h6>
+              <p>
+                ${trade.side.toUpperCase()} ${trade.quantity} @ 
+                ${trade.entryCondition} ${trade.entryPrice}
+              </p>
+              <p>
+                Stop Loss: ${trade.stopLossPrice}
+                ${trade.takeProfitPrice ? `<br>Take Profit: ${trade.takeProfitPrice}` : ''}
+              </p>
+              ${trade.entryTime ? `<small>Entry: ${new Date(trade.entryTime).toLocaleString()}</small>` : ''}
+              ${trade.exitTime ? `<br><small>Exit: ${new Date(trade.exitTime).toLocaleString()}</small>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    async function createConfiguration() {
+      try {
+        const name = document.getElementById('configName').value;
+        
+        const response = await fetch('/api/configs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ name })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to create configuration');
+        }
+        
+        document.getElementById('configName').value = '';
+        loadConfigurations();
+      } catch (error) {
+        console.error('Error creating configuration:', error);
+        alert('Failed to create configuration');
+      }
+    }
+    
+    async function addTrade() {
+      try {
+        const configId = document.getElementById('configSelect').value;
+        const symbol = document.getElementById('symbol').value;
+        const side = document.getElementById('side').value;
+        const quantity = parseFloat(document.getElementById('quantity').value);
+        const entryCondition = document.getElementById('entryCondition').value;
+        const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+        const stopLossPrice = parseFloat(document.getElementById('stopLossPrice').value);
+        const takeProfitPrice = document.getElementById('takeProfitPrice').value 
+          ? parseFloat(document.getElementById('takeProfitPrice').value) 
+          : null;
+        
+        const trade = {
+          symbol,
+          side,
+          quantity,
+          entryCondition,
+          entryPrice,
+          stopLossPrice,
+          takeProfitPrice
+        };
+        
+        const response = await fetch(`/api/configs/${configId}/trades`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(trade)
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to add trade');
+        }
+        
+        // Reset form
+        document.getElementById('symbol').value = '';
+        document.getElementById('quantity').value = '';
+        document.getElementById('entryPrice').value = '';
+        document.getElementById('stopLossPrice').value = '';
+        document.getElementById('takeProfitPrice').value = '';
+        
+        loadConfigurations();
+      } catch (error) {
+        console.error('Error adding trade:', error);
+        alert('Failed to add trade');
+      }
+    }
+    
+    async function toggleConfigStatus(configId, isActive) {
+      try {
+        const response = await fetch(`/api/configs/${configId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ isActive })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to update configuration status');
+        }
+        
+        loadConfigurations();
+      } catch (error) {
+        console.error('Error updating configuration status:', error);
+        alert('Failed to update configuration status');
+      }
+    }
+    
+    async function deleteConfig(configId) {
+      if (!confirm('Are you sure you want to delete this configuration?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/configs/${configId}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete configuration');
+        }
+        
+        loadConfigurations();
+      } catch (error) {
+        console.error('Error deleting configuration:', error);
+        alert('Failed to delete configuration');
+      }
+    }
+  </script>
+</body>
+</html>

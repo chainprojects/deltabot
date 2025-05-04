@@ -1,0 +1,30 @@
+{
+  "name": "delta-exchange-trading-bot",
+  "version": "1.0.0",
+  "description": "Automated trading bot for Delta Exchange",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "body-parser": "^1.20.3",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "mongoose": "^7.6.3",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "delta-exchange",
+    "trading-bot",
+    "cryptocurrency",
+    "automated-trading"
+  ],
+  "author": "",
+  "license": "MIT"
+}
